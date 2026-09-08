@@ -1,7 +1,9 @@
 [Unit]
 Description=金紙秤重 OCR 系統 (FastAPI)
-After=network-online.target
+After=network-online.target docker.service
 Wants=network-online.target
+# vLLM 跑在 docker，OCR 需要它；非硬相依，晚起也只是 OCR 暫時失敗
+Wants=docker.service
 
 [Service]
 Type=simple
