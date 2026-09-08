@@ -1,0 +1,21 @@
+[Unit]
+Description=金紙秤重 OCR 系統 (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=super
+Group=super
+WorkingDirectory=/opt/ai/OCR-INPUT/gold-paper-ocr
+# 主檔與備份路徑（如日後改掛 SMB，改這裡）
+Environment=GPO_XLSX_PATH=/opt/ai/OCR-INPUT/金紙秤重表.xlsx
+Environment=GPO_BACKUP_DIR=/opt/ai/OCR-INPUT/backups
+Environment=GPO_VLLM_URL=http://localhost:8000/v1
+Environment=GPO_VLLM_MODEL=/models/Qwen3.6-27B-FP8
+ExecStart=/opt/ai/OCR-INPUT/gold-paper-ocr/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8770
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

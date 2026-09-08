@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>金紙秤重 OCR</title>
+<style>
+  :root { --line:#ccc; --bad:#e33; --accent:#2563eb; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 system-ui, "Microsoft JhengHei", sans-serif; margin: 0; color:#222; }
+  header { background:#1e293b; color:#fff; padding:12px 20px; }
+  header h1 { font-size:18px; margin:0; }
+  .tabs { display:flex; gap:4px; padding:0 20px; background:#f1f5f9; border-bottom:1px solid var(--line); }
+  .tabs button { border:0; background:none; padding:12px 18px; font-size:15px; cursor:pointer; border-bottom:3px solid transparent; }
+  .tabs button.on { border-color:var(--accent); font-weight:700; color:var(--accent); }
+  main { padding:20px; max-width:1200px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:#555; margin-bottom:3px; }
+  input[type=text], input[type=number], select { padding:7px 9px; font-size:14px; border:1px solid var(--line); border-radius:6px; }
+  input[type=text] { width:320px; }
+  button.go { background:var(--accent); color:#fff; border:0; padding:9px 20px; font-size:15px; border-radius:6px; cursor:pointer; }
+  button.go:disabled { opacity:.5; cursor:default; }
+  button.sm { padding:4px 12px; font-size:13px; }
+  .msg { padding:10px 14px; border-radius:6px; margin:12px 0; white-space:pre-wrap; }
+  .msg.ok { background:#ecfdf5; color:#065f46; } .msg.err { background:#fef2f2; color:#991b1b; }
+  .msg.info { background:#eff6ff; color:#1e40af; }
+  .review { display:flex; gap:20px; flex-wrap:wrap; }
+  .review .imgwrap { flex:1 1 320px; max-width:460px; }
+  .review img { width:100%; border:1px solid var(--line); border-radius:6px; position:sticky; top:10px; }
+  .grid { flex:2 1 420px; }
+  table.cells { border-collapse:collapse; }
+  table.cells td { border:1px solid #e5e7eb; padding:2px 4px; text-align:center; }
+  table.cells .no { color:#888; font-size:12px; width:34px; }
+  table.cells input { width:60px; text-align:center; border:1px solid var(--line); border-radius:4px; padding:4px; font-size:14px; }
+  table.cells input.bad { border-color:var(--bad); background:#fff1f1; }
+  table.cells input.voided { background:#f3f4f6; }
+  table.list { border-collapse:collapse; width:100%; font-size:14px; }
+  table.list th, table.list td { border:1px solid #e5e7eb; padding:6px 8px; text-align:left; }
+  table.list tr.conflict td { background:#fff1f1; }
+  table.list tr.written td { background:#f0fdf4; color:#166534; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:#e5e7eb; }
+  .badge.wait { background:#fef9c3; } .badge.done { background:#dbeafe; }
+  .badge.confirmed { background:#c7d2fe; } .badge.written { background:#bbf7d0; }
+  .badge.failed { background:#fecaca; }
+  .hint { font-size:13px; color:#666; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #bcd; border-top-color:var(--accent); border-radius:50%; animation:sp .8s linear infinite; vertical-align:-2px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<header><h1>金紙秤重 OCR 系統</h1></header>
+<div class="tabs">
+  <button id="t-gen" class="on" onclick="showTab('gen')">產生分頁</button>
+  <button id="t-ocr" onclick="showTab('ocr')">上傳辨識（單張）</button>
+  <button id="t-batch" onclick="showTab('batch')">批次上傳</button>
+</div>
+
+<main>
+  <!-- ========== 產生分頁 ========== -->
+  <section id="gen">
+    <div class="row">
+      <div><label>日期（YYYYMMDD，多筆用逗號分隔）</label>
+        <input type="text" id="g-dates" placeholder="20260910, 20260911"></div>
+      <div><label>神明頁數</label><input type="number" id="g-god" value="1" min="1" max="9" style="width:70px"></div>
+      <div><label>先靈頁數</label><input type="number" id="g-spirit" value="1" min="1" max="9" style="width:70px"></div>
+      <button class="go" id="g-btn" onclick="doGenerate()">產生</button>
+    </div>
+    <div class="hint">每個日期固定產生「神明-日期」「先靈-日期」一組；續頁 -2、-3…。已存在的略過，頁數不足才補。</div>
+    <div id="g-msg"></div>
+  </section>
+
+  <!-- ========== 單張上傳 ========== -->
+  <section id="ocr" hidden>
+    <div class="row">
+      <div><label>秤重表照片（一次一張）</label><input type="file" id="o-file" accept="image/*"></div>
+      <button class="go" id="o-btn" onclick="doOcr()">辨識</button>
+    </div>
+    <div class="hint">辨識約需 1–2 分鐘。完成後請逐格對照原圖檢查，紅框為低信心或超出範圍。</div>
+    <div id="o-msg"></div>
+    <div id="o-review" class="review" hidden>
+      <div class="imgwrap"><img id="o-img" alt="上傳影像"></div>
+      <div class="grid">
+        <div class="row" style="margin-bottom:8px">
+          <div><label>目標分頁</label><select id="o-sheet"></select></div>
+          <div style="align-self:center"><label style="display:inline"><input type="checkbox" id="o-overwrite"> 覆蓋已有資料</label></div>
+          <button class="go" id="o-write" onclick="doWrite()">確認寫入</button>
+        </div>
+        <div id="o-meta" class="hint"></div>
+        <table class="cells"><tbody id="o-body"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 批次上傳 ========== -->
+  <section id="batch" hidden>
+    <div class="row">
+      <div><label>作業年份</label><input type="number" id="b-year" style="width:100px"></div>
+      <div><label>秤重表照片（可多選）</label><input type="file" id="b-files" accept="image/*" multiple></div>
+      <button class="go" id="b-btn" onclick="doBatch()">上傳並辨識</button>
+    </div>
+    <div class="hint">逐張背景辨識（每張約 1–2 分鐘）。完成後在下表逐列點「複核」對照原圖修正、確認目標分頁，最後按「寫入已確認列」一次寫入。</div>
+    <div id="b-msg"></div>
+    <div id="b-panel" hidden>
+      <table class="list"><thead><tr>
+        <th>#</th><th>檔名</th><th>OCR日期</th><th>OCR類別</th><th>目標分頁</th><th>值</th><th>狀態</th><th></th>
+      </tr></thead><tbody id="b-body"></tbody></table>
+      <div class="row" style="margin-top:12px">
+        <button class="go" id="b-write" onclick="doBatchWrite()">寫入已確認列</button>
+        <span class="hint" id="b-summary"></span>
+      </div>
+      <div id="b-review" class="review" hidden style="margin-top:16px;border-top:1px solid var(--line);padding-top:16px">
+        <div class="imgwrap"><img id="b-img" alt=""></div>
+        <div class="grid">
+          <div class="row" style="margin-bottom:8px">
+            <div><label>目標分頁</label><select id="b-sheet"></select></div>
+            <div style="align-self:center"><label style="display:inline"><input type="checkbox" id="b-overwrite"> 覆蓋已有資料</label></div>
+            <button class="go sm" onclick="doBatchItemConfirm()">此列確認</button>
+            <button class="sm" onclick="$('#b-review').hidden=true">關閉</button>
+          </div>
+          <div id="b-itemmeta" class="hint"></div>
+          <table class="cells"><tbody id="b-cellbody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+function showTab(t){
+  for (const x of ['gen','ocr','batch']){ $('#'+x).hidden = x!==t; $('#t-'+x).classList.toggle('on', x===t); }
+}
+function msg(el, text, kind){ el.className = 'msg '+kind; el.textContent = text; }
+$('#b-year').value = new Date().getFullYear();
+
+/* ---------- 共用：重量格表格 ---------- */
+function buildGrid(tbody, cells){
+  const byNo = {}; cells.forEach(c => byNo[c.no] = c);
+  const nos = cells.map(c=>c.no);
+  const minNo = nos.length ? Math.min(...nos) : 1;
+  const base = Math.floor((minNo-1)/90) * 90;
+  tbody.innerHTML='';
+  for(let i=0;i<30;i++){
+    const tr = document.createElement('tr');
+    for(let col=0;col<3;col++){
+      const no = base + col*30 + i + 1;
+      const c = byNo[no];
+      const bad = c && (c.confidence==='low' || (c.flags && c.flags.length));
+      const voided = c && c.voided;
+      tr.insertAdjacentHTML('beforeend',
+        `<td class="no">${no}</td>`+
+        `<td><input data-no="${no}" type="number" step="0.1" min="0" `+
+        `class="${bad?'bad':''} ${voided?'voided':''}" `+
+        `value="${(c && c.weight!=null)?c.weight:''}" `+
+        `title="${voided?'原表塗銷':(c?('信心:'+c.confidence+(c.flags&&c.flags.length?' '+c.flags.join(','):'')):'未辨識')}"></td>`);
+    }
+    tbody.appendChild(tr);
+  }
+  return {base};
+}
+function readGrid(tbody){
+  const w = {};
+  tbody.querySelectorAll('input').forEach(inp=>{
+    const v = inp.value.trim();
+    w[inp.dataset.no] = v==='' ? null : parseFloat(v);
+  });
+  return w;
+}
+function fillSheetSelect(sel, sheets, chosen){
+  sel.innerHTML='<option value="">— 請選擇 —</option>';
+  for(const s of sheets){ const o=document.createElement('option'); o.value=o.textContent=s; sel.appendChild(o); }
+  if(chosen) sel.value = chosen;
+}
+
+/* ---------- 產生分頁 ---------- */
+async function doGenerate(){
+  const dates = $('#g-dates').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!dates.length){ msg($('#g-msg'),'請輸入日期','err'); return; }
+  $('#g-btn').disabled = true; msg($('#g-msg'),'處理中…','info');
+  try{
+    const r = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({dates, god_pages:+$('#g-god').value, spirit_pages:+$('#g-spirit').value})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    msg($('#g-msg'),
+      `已產生 ${d.created.length} 張：\n${d.created.join('、')||'（無）'}\n\n略過 ${d.skipped.length} 張：\n${d.skipped.join('、')||'（無）'}`,'ok');
+  }catch(e){ msg($('#g-msg'), '失敗：'+e.message, 'err'); }
+  $('#g-btn').disabled = false;
+}
+
+/* ---------- 單張上傳 ---------- */
+async function doOcr(){
+  const f = $('#o-file').files[0];
+  if(!f){ msg($('#o-msg'),'請選擇檔案','err'); return; }
+  $('#o-btn').disabled = true; $('#o-review').hidden = true;
+  $('#o-msg').className='msg info'; $('#o-msg').innerHTML = '<span class="spin"></span> 辨識中，請稍候…';
+  try{
+    const fd = new FormData(); fd.append('image', f);
+    const r = await fetch('/api/ocr',{method:'POST', body:fd});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    $('#o-img').src = URL.createObjectURL(f);
+    fillSheetSelect($('#o-sheet'), d.sheets, d.suggested_sheet);
+    const g = buildGrid($('#o-body'), d.cells);
+    $('#o-meta').textContent = `本頁編號 ${g.base+1}–${g.base+90}。空白＝未秤或未辨識；塗銷格留白。`;
+    $('#o-review').hidden = false;
+    msg($('#o-msg'), `辨識完成：表頭日期「${d.date_text||'?'}」，類別判定「${d.category||'?'}」（僅供參考，請確認目標分頁）`, 'ok');
+  }catch(e){ msg($('#o-msg'), '失敗：'+e.message, 'err'); }
+  $('#o-btn').disabled = false;
+}
+async function doWrite(){
+  const sheet = $('#o-sheet').value;
+  if(!sheet){ msg($('#o-msg'),'請先選目標分頁','err'); return; }
+  const weights = readGrid($('#o-body'));
+  if(!confirm(`確認把 ${Object.values(weights).filter(v=>v!=null).length} 筆重量寫入「${sheet}」？`)) return;
+  $('#o-write').disabled = true; msg($('#o-msg'),'寫入中…','info');
+  try{
+    const r = await fetch('/api/write',{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({sheet, weights, overwrite: $('#o-overwrite').checked})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    msg($('#o-msg'), `已寫入「${d.sheet}」：${d.written} 筆。`, 'ok');
+    $('#o-review').hidden = true; $('#o-file').value='';
+  }catch(e){ msg($('#o-msg'), '失敗：'+e.message, 'err'); }
+  $('#o-write').disabled = false;
+}
+
+/* ---------- 批次上傳 ---------- */
+let BID = null, POLL = null, CUR_ITEM = null, LAST = null;
+const STLABEL = {ocr_pending:['辨識中…','wait'], ocr_done:['待複核','done'], ocr_failed:['OCR失敗','failed'],
+  confirmed:['已確認','confirmed'], written:['已寫入','written'], write_failed:['寫入失敗','failed'], skipped:['略過','']};
+
+async function doBatch(){
+  const files = $('#b-files').files;
+  if(!files.length){ msg($('#b-msg'),'請選擇檔案','err'); return; }
+  $('#b-btn').disabled = true;
+  $('#b-msg').className='msg info'; $('#b-msg').innerHTML = '<span class="spin"></span> 上傳中…';
+  try{
+    const fd = new FormData();
+    fd.append('year', $('#b-year').value);
+    for(const f of files) fd.append('images', f);
+    const r = await fetch('/api/batch',{method:'POST', body:fd});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    BID = d.id; $('#b-panel').hidden = false;
+    renderBatch(d);
+    msg($('#b-msg'), `已建立批次，共 ${d.items.length} 張，背景辨識中…`, 'info');
+    if(POLL) clearInterval(POLL);
+    POLL = setInterval(pollBatch, 3000);
+  }catch(e){ msg($('#b-msg'), '失敗：'+e.message, 'err'); }
+  $('#b-btn').disabled = false;
+}
+async function pollBatch(){
+  if(!BID) return;
+  const r = await fetch('/api/batch/'+BID); if(!r.ok){ clearInterval(POLL); return; }
+  const d = await r.json(); renderBatch(d);
+  if(d.ocr_done){ clearInterval(POLL); POLL=null;
+    if($('#b-msg').classList.contains('info'))
+      msg($('#b-msg'), '辨識完成，請逐列複核。', 'ok');
+  }
+}
+function renderBatch(d){
+  LAST = d;
+  const tb = $('#b-body'); tb.innerHTML='';
+  d.items.forEach((it, idx)=>{
+    const [txt, cls] = STLABEL[it.status] || [it.status,''];
+    const tr = document.createElement('tr');
+    tr.className = it.conflict ? 'conflict' : (it.status==='written'?'written':'');
+    const canReview = ['ocr_done','confirmed','write_failed'].includes(it.status);
+    tr.innerHTML =
+      `<td>${idx+1}</td><td>${it.filename}</td><td>${it.date_text||'-'}</td>`+
+      `<td>${it.ocr_category||'-'}</td>`+
+      `<td>${it.target_sheet||'<span style="color:#b45309">未定</span>'}${it.conflict?' ⚠重複':''}</td>`+
+      `<td>${it.n_values}</td>`+
+      `<td><span class="badge ${cls}">${txt}</span>${it.error?('<br><span class="hint">'+it.error+'</span>'):''}</td>`+
+      `<td>${canReview?`<button class="sm" onclick="openItem('${it.id}')">複核</button>`:''}</td>`;
+    tb.appendChild(tr);
+  });
+  const conf = d.items.filter(i=>i.status==='confirmed').length;
+  const wr = d.items.filter(i=>i.status==='written').length;
+  $('#b-summary').textContent = `已確認 ${conf} 列，已寫入 ${wr} 列`;
+}
+function openItem(iid){
+  const it = LAST.items.find(x=>x.id===iid); if(!it) return;
+  CUR_ITEM = iid;
+  $('#b-img').src = `/api/batch/${BID}/item/${iid}/image`;
+  fillSheetSelect($('#b-sheet'), LAST.sheets, it.target_sheet);
+  $('#b-overwrite').checked = !!it.overwrite;
+  const g = buildGrid($('#b-cellbody'), it.cells);
+  $('#b-itemmeta').textContent = `${it.filename}｜本頁編號 ${g.base+1}–${g.base+90}｜OCR：${it.date_text||'?'} / ${it.ocr_category||'?'}`;
+  $('#b-review').hidden = false;
+  $('#b-review').scrollIntoView({behavior:'smooth', block:'start'});
+}
+async function doBatchItemConfirm(){
+  const sheet = $('#b-sheet').value;
+  if(!sheet){ alert('請選目標分頁'); return; }
+  const weights = readGrid($('#b-cellbody'));
+  const r = await fetch(`/api/batch/${BID}/item/${CUR_ITEM}`,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sheet, weights, overwrite: $('#b-overwrite').checked})});
+  const d = await r.json();
+  if(!r.ok){ alert('失敗：'+(d.detail||'')); return; }
+  $('#b-review').hidden = true;
+  pollOnce();
+}
+async function pollOnce(){ const r = await fetch('/api/batch/'+BID); if(r.ok) renderBatch(await r.json()); }
+async function doBatchWrite(){
+  if(!confirm('把所有「已確認」列一次寫入主檔？')) return;
+  $('#b-write').disabled = true; msg($('#b-msg'),'寫入中…','info');
+  try{
+    const r = await fetch(`/api/batch/${BID}/write`,{method:'POST'});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    msg($('#b-msg'), `完成：寫入 ${d.written} 列，失敗 ${d.failed} 列。`, d.failed?'err':'ok');
+    pollOnce();
+  }catch(e){ msg($('#b-msg'), '失敗：'+e.message, 'err'); }
+  $('#b-write').disabled = false;
+}
+</script>
+</body>
+</html>
