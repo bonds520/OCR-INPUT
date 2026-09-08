@@ -132,6 +132,10 @@ function showTab(t){
 }
 function msg(el, text, kind){ el.className = 'msg '+kind; el.textContent = text; }
 $('#b-year').value = new Date().getFullYear();
+function pubNote(p){
+  if(!p || !p.enabled) return '';
+  return '\n公用資料夾：' + (p.ok ? '已複寫' : '⚠ '+p.message);
+}
 
 /* ---------- 共用：重量格表格 ---------- */
 function buildGrid(tbody, cells){
@@ -183,7 +187,7 @@ async function doGenerate(){
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
     msg($('#g-msg'),
-      `已產生 ${d.created.length} 張：\n${d.created.join('、')||'（無）'}\n\n略過 ${d.skipped.length} 張：\n${d.skipped.join('、')||'（無）'}`,'ok');
+      `已產生 ${d.created.length} 張：\n${d.created.join('、')||'（無）'}\n\n略過 ${d.skipped.length} 張：\n${d.skipped.join('、')||'（無）'}`+pubNote(d.publish),'ok');
   }catch(e){ msg($('#g-msg'), '失敗：'+e.message, 'err'); }
   $('#g-btn').disabled = false;
 }
@@ -219,7 +223,7 @@ async function doWrite(){
       body: JSON.stringify({sheet, weights, overwrite: $('#o-overwrite').checked})});
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
-    msg($('#o-msg'), `已寫入「${d.sheet}」：${d.written} 筆。`, 'ok');
+    msg($('#o-msg'), `已寫入「${d.sheet}」：${d.written} 筆。`+pubNote(d.publish), d.publish&&d.publish.enabled&&!d.publish.ok?'err':'ok');
     $('#o-review').hidden = true; $('#o-file').value='';
   }catch(e){ msg($('#o-msg'), '失敗：'+e.message, 'err'); }
   $('#o-write').disabled = false;
@@ -311,7 +315,7 @@ async function doBatchWrite(){
     const r = await fetch(`/api/batch/${BID}/write`,{method:'POST'});
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
-    msg($('#b-msg'), `完成：寫入 ${d.written} 列，失敗 ${d.failed} 列。`, d.failed?'err':'ok');
+    msg($('#b-msg'), `完成：寫入 ${d.written} 列，失敗 ${d.failed} 列。`+pubNote(d.publish), (d.failed||(d.publish&&d.publish.enabled&&!d.publish.ok))?'err':'ok');
     pollOnce();
   }catch(e){ msg($('#b-msg'), '失敗：'+e.message, 'err'); }
   $('#b-write').disabled = false;

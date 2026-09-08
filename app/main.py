@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from . import config
 from .batch import BatchStore, mark_conflicts, run_ocr
 from .ocr import recognize
+from .publish import publish
 from .sheetgen import generate_for_date
 from .writeback import WEIGHT_REFS, page_of, write_weights
 from .xlsxpkg import XlsxError, XlsxPackage, excel_lock_present
@@ -110,6 +111,7 @@ async def api_generate(req: GenerateReq):
         if result["created"]:
             pkg.backup(config.BACKUP_DIR, config.BACKUP_KEEP)
             pkg.save(config.XLSX_PATH)
+            result["publish"] = publish()
     return result
 
 
@@ -153,6 +155,7 @@ async def api_write(req: WriteReq):
             raise HTTPException(409, str(e))
         pkg.backup(config.BACKUP_DIR, config.BACKUP_KEEP)
         pkg.save(config.XLSX_PATH)
+        summary["publish"] = publish()
     return summary
 
 
@@ -246,11 +249,14 @@ async def api_batch_write(bid: str):
                 item.status = "write_failed"
                 item.error = str(e)
                 results.append({"id": item.id, "ok": False, "error": str(e)})
+        pub = {"enabled": False, "ok": True, "message": ""}
         if wrote_any:
             pkg.save(config.XLSX_PATH)
+            pub = publish()
     return {"results": results,
             "written": sum(1 for r in results if r["ok"]),
-            "failed": sum(1 for r in results if not r["ok"])}
+            "failed": sum(1 for r in results if not r["ok"]),
+            "publish": pub}
 
 
 @app.delete("/api/batch/{bid}")
