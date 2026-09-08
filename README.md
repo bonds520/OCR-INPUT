@@ -44,7 +44,6 @@ journalctl -u gold-paper-ocr -f           # 看記錄
 | `GPO_BACKUP_DIR` | `<主檔目錄>/backups` | 備份目錄，保留最近 30 份 |
 | `GPO_VLLM_URL` | `http://localhost:8000/v1` | vLLM OpenAI 相容端點 |
 | `GPO_VLLM_MODEL` | `/models/Qwen3.6-27B-FP8` | 模型 ID |
-| `GPO_PUBLISH_PATH` | （空＝關閉） | 每次寫入/產生成功後，把主檔**單向覆蓋**到這個路徑（通常是掛載進來的公用資料夾內的檔案）。目標被 Excel 開著時複寫會失敗，但**不影響本機寫入**，網頁會顯示警告。 |
 
 systemd 版本改 `deploy/gold-paper-ocr.service` 裡的 `Environment=`。
 

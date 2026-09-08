@@ -10,10 +10,6 @@ XLSX_PATH = Path(os.environ.get("GPO_XLSX_PATH", "/opt/ai/OCR-INPUT/金紙秤重
 BACKUP_DIR = Path(os.environ.get("GPO_BACKUP_DIR", str(XLSX_PATH.parent / "backups")))
 BACKUP_KEEP = 30
 
-# 公用資料夾複寫：每次寫入/產生成功後，把主檔覆蓋過去這個路徑（單向）。
-# 留空 = 關閉此功能。目標檔若正被 Excel 開著，複寫會失敗但不影響本機寫入。
-PUBLISH_PATH = Path(p) if (p := os.environ.get("GPO_PUBLISH_PATH", "").strip()) else None
-
 # 本機 vLLM（VLM）
 VLLM_BASE_URL = os.environ.get("GPO_VLLM_URL", "http://localhost:8000/v1")
 VLLM_MODEL = os.environ.get("GPO_VLLM_MODEL", "/models/Qwen3.6-27B-FP8")
