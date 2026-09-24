@@ -24,15 +24,16 @@ cd /opt/ai/OCR-INPUT/gold-paper-ocr
 ./run.sh        # http://<本機IP>:8770
 ```
 
-### systemd（正式，目前不設開機自啟）
+### systemd（正式，已設開機自啟）
 ```bash
 sudo cp deploy/gold-paper-ocr.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl start gold-paper-ocr        # 啟動
+sudo systemctl enable --now gold-paper-ocr   # 開機自啟 + 立即啟動
 sudo systemctl status gold-paper-ocr
-# 要開機自啟時再： sudo systemctl enable gold-paper-ocr
-journalctl -u gold-paper-ocr -f           # 看記錄
+journalctl -u gold-paper-ocr -f              # 看記錄
+sudo systemctl restart gold-paper-ocr        # 改程式後重啟
 ```
+（若已有手動跑的 `run.sh` 佔著 8770，先停掉再啟。）
 
 瀏覽器開 `http://<本機IP>:8770`。
 
@@ -62,7 +63,8 @@ systemd 版本改 `deploy/gold-paper-ocr.service` 裡的 `Environment=`。
 
 ```
 app/
-  main.py       FastAPI：/api/sheets /api/generate /api/ocr /api/write
+  main.py       FastAPI：/api/sheets /api/generate /api/ocr /api/write /api/batch*
+  batch.py      批次上傳：記憶體 store、背景 OCR、路由建議、衝突偵測
   config.py     設定（讀環境變數）
   xlsxpkg.py    OOXML 外科手術式讀寫
   sheetgen.py   由空白範本產生新分頁
@@ -70,7 +72,7 @@ app/
   ocr.py        vLLM 呼叫、回應解析、驗證
 web/index.html  單頁前端
 deploy/gold-paper-ocr.service   systemd unit
-tests/          test_xlsx / test_writeback（複本上跑）、test_ocr（需 samples/）
+tests/          test_xlsx / test_writeback / test_batch（複本上跑）、test_ocr（需 samples/）
 ```
 
 ## 測試
