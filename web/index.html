@@ -67,6 +67,16 @@
     </div>
     <div class="hint">每個日期固定產生「神明-日期」「先靈-日期」一組；續頁 -2、-3…。已存在的略過，頁數不足才補。</div>
     <div id="g-msg"></div>
+    <div id="g-print"></div>
+
+    <hr style="margin:26px 0 18px;border:0;border-top:1px solid var(--line)">
+    <div class="row">
+      <div><label>重印已產生的分頁：日期（YYYYMMDD，多筆用逗號分隔）</label>
+        <input type="text" id="r-dates" placeholder="20260925, 20260926"></div>
+      <button class="go" id="r-btn" onclick="doReprintFind()">查詢</button>
+    </div>
+    <div id="r-msg"></div>
+    <div id="r-list"></div>
   </section>
 
   <!-- ========== 單張上傳 ========== -->
@@ -176,7 +186,7 @@ function fillSheetSelect(sel, sheets, chosen){
 async function doGenerate(){
   const dates = $('#g-dates').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(!dates.length){ msg($('#g-msg'),'請輸入日期','err'); return; }
-  $('#g-btn').disabled = true; msg($('#g-msg'),'處理中…','info');
+  $('#g-btn').disabled = true; $('#g-print').innerHTML=''; msg($('#g-msg'),'處理中…','info');
   try{
     const r = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},
       body: JSON.stringify({dates, god_pages:+$('#g-god').value, spirit_pages:+$('#g-spirit').value})});
@@ -184,8 +194,59 @@ async function doGenerate(){
     if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
     msg($('#g-msg'),
       `已產生 ${d.created.length} 張：\n${d.created.join('、')||'（無）'}\n\n略過 ${d.skipped.length} 張：\n${d.skipped.join('、')||'（無）'}`,'ok');
+    if(d.created.length){
+      const b = document.createElement('button'); b.className='go';
+      b.textContent = `列印本次新增（${d.created.length} 頁）`;
+      b.onclick = () => window.open('/print?sheets='+encodeURIComponent(d.created.join(',')), '_blank');
+      $('#g-print').appendChild(b);
+    }
   }catch(e){ msg($('#g-msg'), '失敗：'+e.message, 'err'); }
   $('#g-btn').disabled = false;
+}
+
+/* ---------- 重印已產生的分頁 ---------- */
+const PRINTABLE = /^(神明|先靈)-(\d{8})(?:-(\d{1,2}))?$/;
+async function doReprintFind(){
+  const dates = $('#r-dates').value.split(',').map(s=>s.trim().replace(/[-\/]/g,'')).filter(Boolean);
+  if(!dates.length){ msg($('#r-msg'),'請輸入日期','err'); return; }
+  if(dates.some(d=>!/^\d{8}$/.test(d))){ msg($('#r-msg'),'日期格式需為 YYYYMMDD','err'); return; }
+  $('#r-btn').disabled = true; $('#r-list').innerHTML=''; msg($('#r-msg'),'查詢中…','info');
+  try{
+    const r = await fetch('/api/sheets'); const d = await r.json();
+    if(!r.ok) throw new Error(d.detail || JSON.stringify(d));
+    const found = [], missing = [];
+    for(const dt of dates){
+      const hit = d.sheets.map(n=>({n, m:PRINTABLE.exec(n)})).filter(x=>x.m && x.m[2]===dt)
+        .sort((a,b)=> a.m[1]===b.m[1] ? (+a.m[3]||1)-(+b.m[3]||1) : (a.m[1]==='神明'?-1:1));
+      if(hit.length) found.push(...hit.map(x=>x.n)); else missing.push(dt);
+    }
+    if(!found.length){ msg($('#r-msg'),'查無已產生的分頁：'+missing.join('、'),'err'); }
+    else{
+      msg($('#r-msg'), '找到 '+found.length+' 個分頁，勾選要列印的：'+(missing.length?('\n查無：'+missing.join('、')):''), 'ok');
+      renderReprint(found);
+    }
+  }catch(e){ msg($('#r-msg'), '失敗：'+e.message, 'err'); }
+  $('#r-btn').disabled = false;
+}
+function renderReprint(names){
+  const box = $('#r-list'); box.innerHTML='';
+  const list = document.createElement('div'); list.style.cssText='display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:12px';
+  const btn = document.createElement('button'); btn.className='go';
+  const upd = () => {
+    const n = list.querySelectorAll('input:checked').length;
+    btn.textContent = `列印所選（${n} 頁）`; btn.disabled = n===0;
+  };
+  for(const nm of names){
+    const lb = document.createElement('label'); lb.style.cssText='display:inline-flex;gap:4px;align-items:center;font-size:14px;color:#222';
+    const cb = document.createElement('input'); cb.type='checkbox'; cb.checked=true; cb.value=nm; cb.onchange=upd;
+    lb.appendChild(cb); lb.appendChild(document.createTextNode(nm)); list.appendChild(lb);
+  }
+  btn.onclick = () => {
+    const sel = [...list.querySelectorAll('input:checked')].map(i=>i.value);
+    if(sel.length>100){ alert('一次最多 100 頁'); return; }
+    window.open('/print?sheets='+encodeURIComponent(sel.join(',')), '_blank');
+  };
+  box.appendChild(list); box.appendChild(btn); upd();
 }
 
 /* ---------- 單張上傳 ---------- */

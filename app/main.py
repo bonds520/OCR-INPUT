@@ -16,12 +16,13 @@ import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from . import config
 from .batch import BatchStore, mark_conflicts, run_ocr
 from .ocr import recognize
+from .printview import BadSheetName, render as render_print
 from .sheetgen import generate_for_date
 from .writeback import WEIGHT_REFS, page_of, write_weights
 from .xlsxpkg import XlsxError, XlsxPackage, excel_lock_present
@@ -86,6 +87,17 @@ def _suggest_sheet(sheets: list[str], date_text: str, category: str | None) -> s
 @app.get("/")
 def index():
     return FileResponse(_WEB / "index.html")
+
+
+@app.get("/print", response_class=HTMLResponse)
+def print_view(sheets: str):
+    names = [x.strip() for x in sheets.split(",") if x.strip()]
+    if not names or len(names) > 100:
+        raise HTTPException(422, "分頁數需為 1–100")
+    try:
+        return HTMLResponse(render_print(names))
+    except BadSheetName as e:
+        raise HTTPException(422, f"分頁名不合法：{e}")
 
 
 @app.get("/api/sheets")

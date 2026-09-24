@@ -4,7 +4,7 @@
 
 ## 功能
 
-1. **產生分頁** — 網頁輸入日期（可多筆），系統在 XLSX 產生 `神明-YYYYMMDD` / `先靈-YYYYMMDD` 一組（不足時補續頁 `-2`、`-3`…，續頁編號 91–180、181–270…）。列印由人工在 Excel 執行。
+1. **產生分頁** — 網頁輸入日期（可多筆），系統在 XLSX 產生 `神明-YYYYMMDD` / `先靈-YYYYMMDD` 一組（不足時補續頁 `-2`、`-3`…，續頁編號 91–180、181–270…）。產生成功後可按「**列印本次新增（N 頁）**」開啟列印檢視（`/print`）：只含本次新增的分頁，A4 直向、每分頁一張空白表，跳出瀏覽器列印視窗（請選 A4、縮放 100%、關閉頁首頁尾）。版面微調改 `app/printview.py` 內 CSS 變數（列高、字級、邊界）。已產生過的分頁可在同頁下方「重印」區輸入日期查詢、勾選後再印。也可繼續在 Excel 內列印。
 2. **上傳辨識（單張）** — 上傳一張秤重表照片 → OCR 出重量初稿 → 人工在網頁逐格對照原圖修正 → 選定目標分頁 → 寫回 `B/D/F` 欄。
 3. **批次上傳** — 一次多張 + 填「作業年份」→ 背景逐張 OCR → 總表逐列點「複核」對照原圖修正、確認目標分頁（系統依年份+OCR日期/類別給建議，比不到留空）→「寫入已確認列」一次交易寫入（單次備份、單次存檔；部分失敗照寫其餘）。同一分頁被兩列指到會標紅擋下。
 
@@ -68,11 +68,12 @@ app/
   config.py     設定（讀環境變數）
   xlsxpkg.py    OOXML 外科手術式讀寫
   sheetgen.py   由空白範本產生新分頁
+  printview.py  空白表列印檢視（由分頁名產生 A4 HTML，不讀 xlsx）
   writeback.py  編號→儲存格對照、回填、覆蓋保護
   ocr.py        vLLM 呼叫、回應解析、驗證
 web/index.html  單頁前端
 deploy/gold-paper-ocr.service   systemd unit
-tests/          test_xlsx / test_writeback / test_batch（複本上跑）、test_ocr（需 samples/）
+tests/          test_xlsx / test_writeback / test_batch / test_printview（複本上跑）、test_ocr（需 samples/）
 ```
 
 ## 測試
@@ -81,5 +82,6 @@ tests/          test_xlsx / test_writeback / test_batch（複本上跑）、test
 ./.venv/bin/python tests/test_xlsx.py        # 分頁產生
 ./.venv/bin/python tests/test_writeback.py   # 回填
 ./.venv/bin/python tests/test_batch.py       # 批次邏輯（OCR 用假資料）
+./.venv/bin/python tests/test_printview.py   # 列印檢視
 ./.venv/bin/python tests/test_ocr.py         # OCR 準確率（需 /opt/ai/OCR-INPUT/samples/*.jpg）
 ```
